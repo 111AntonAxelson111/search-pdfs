@@ -30,11 +30,11 @@ from dataclasses import dataclass
 
 @dataclass
 class UserInputCmd():
-    open_file =   ("view","open","viewpdf","openpdf")
-    open_folder = ("view","open","viewpdf","openpdf")
+    open_file =   ("--view","--open","--viewpdf","--openpdf")
+    open_folder = ("--view","--open","--viewpdf","--openpdf")
     new_dir  = ("--new-folder","--new-dir")
-    help = ("help")
-    exit = ("exit")
+    help = ("--help")
+    exit = ("--exit")
 
 parse = UserInputCmd()
 
