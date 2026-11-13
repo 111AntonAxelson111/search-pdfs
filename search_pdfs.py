@@ -28,7 +28,7 @@ from dataclasses import dataclass
 
 
 
-@dataclass
+#@dataclass
 class UserInputCmd():
     open_file =   ("--view","--open","--viewpdf","--openpdf")
     open_folder = ("--view","--open","--viewpdf","--openpdf")
@@ -316,61 +316,44 @@ def parse_sstrings(first_time:bool,raw_user_inp)->List[str]:
 
 
 
-#===================================================================
 def open_with_sumatrapdf(file_path, sumatra_path=None):
-    """
-    Opens a PDF file with SumatraPDF – includes user's specific path
-    """
     file_path = Path(file_path)
 
     if not file_path.exists():
         print(f"Error: File not found - {file_path}")
         return False
-
-    if file_path.suffix.lower() != '.pdf':
+    if file_path.suffix.lower() != ".pdf":
         print(f"Error: Not a PDF file - {file_path}")
         return False
 
-    # If no path provided, search common locations
     if sumatra_path is None:
-        # Build list of possible SumatraPDF locations
         possible_paths = [
-            
-            # Standard Program Files locations
             Path("C:/Program Files/SumatraPDF/SumatraPDF.exe"),
             Path("C:/Program Files (x86)/SumatraPDF/SumatraPDF.exe"),
-            # Local AppData (generic)
             Path.home() / "AppData/Local/SumatraPDF/SumatraPDF.exe",
-            # From PATH environment
             Path(shutil.which("SumatraPDF")) if shutil.which("SumatraPDF") else None,
-            # Portable in current directory
             Path.cwd() / "SumatraPDF.exe",
         ]
-
-        # Filter out None and check existence + is_file
         for path in possible_paths:
-            if path and path.exists() and path.is_file():
+            if path and path.is_file():
                 sumatra_path = path
                 break
-
         if sumatra_path is None:
             print("Error: Could not find SumatraPDF installation.")
-            print("Please provide the path manually or install SumatraPDF.")
             return False
 
-    # Now open the file
     try:
         if sys.platform == "win32":
-            subprocess.run([str(sumatra_path), str(file_path)], check=True)
+            subprocess.Popen([str(sumatra_path), str(file_path)])   # ← Popen, no wait
         else:
-            subprocess.run(["xdg-open", str(file_path)], check=True)
-
+            subprocess.Popen(["xdg-open", str(file_path)])          # ← Popen, no wait
         print(f"Opened: {file_path}")
         return True
-
     except Exception as e:
         print(f"Error opening file: {e}")
         return False
+
+
 
 def bbbbbopen_with_sumatrapdf(file_path, sumatra_path=None)->None | bool:
     
@@ -823,9 +806,13 @@ def main():
             #
             #  here user write "--view" or "--open" or "--viewpdf" or "--openpdf"
             #
-            assert len(raw_user_inp)==1            
-            pdf_path_that_should_be_opened=open_finder_with_directory_path(target_folder)
-            open_with_sumatrapdf(pdf_path_that_should_be_opened)
+            assert len(raw_user_inp.lower().strip().split())==1    
+            
+            all_pdf_paths = get_all_pdf_paths(target_folder)
+            for pdf_path in all_pdf_paths:
+                open_with_sumatrapdf(pdf_path)
+            
+            
             continue
         
         #
