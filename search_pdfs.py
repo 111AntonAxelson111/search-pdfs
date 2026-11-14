@@ -7,7 +7,7 @@ import tkinter as tk
 from tkinter import filedialog
 import pymupdf as fitz  # PyMuPDF
 from datetime import datetime
-from typing import List,Dict
+from typing import List,Dict,Tuple
 from pathlib import Path
 import json
 import time
@@ -25,26 +25,104 @@ from rich.style import Style
 
 from dataclasses import dataclass
 
+import vector_search
+embed_texts = None
+
+
+
+
 
 
 
 #@dataclass
 class UserInputCmd():
-    open_file =   ("--view","--open","--viewpdf","--openpdf")
-    open_folder = ("--view","--open","--viewpdf","--openpdf")
-    new_dir  = ("--new-folder","--new-dir")
-    help = ("--help")
-    exit = ("--exit")
+    vector_search:Tuple = ("--vector", "--vec")
+    open_file:Tuple =   ("--view","--open","--viewpdf","--openpdf")
+    open_folder:Tuple = ("--view","--open","--viewpdf","--openpdf")
+    new_dir:Tuple  = ("--new-folder","--new-dir")
+    help:Tuple = ("--help","--help")
+    exit:Tuple = ("--exit","--exit")
 
 parse = UserInputCmd()
 
-
-
-
+for item in [
+    parse.vector_search,
+    parse.open_file,
+    parse.open_folder,
+    parse.new_dir,
+    parse.help,
+    parse.exit,
+    ]:
+    ic(item)
+    if not isinstance(item,tuple):
+        raise
+    
 
 ic.enable()
 console = Console()
 start_time = time.time()
+
+
+
+
+
+
+
+
+
+def vec_search(embed_texts,raw_user_inp):
+    
+    
+    if not  embed_texts is None:
+        embed_texts = vector_search.make_sentence_transformer_embedder(
+            vector_search.EMBEDDING_MODEL_NAME
+        )
+    
+    query = raw_user_inp
+    for cmd_string in parse.vector_search:
+        query = query.replace(cmd_string,"")
+
+    # Search
+    results = vector_search.find_similar(
+        query=query,
+        embed_texts=embed_texts,
+        top_k=5
+    )
+    ic(results)
+    
+    if not results:
+        print("No matching chunks found.")
+
+    for rank, result in enumerate(results, start=1):
+
+        # Convert relative PDF path into absolute path
+        pdf_path = vector_search.TARGET_PDF_DIR / result["path"]
+
+        # Reuse your existing PDF opening ID system
+        id_counter += 1
+
+        path_id_lis_last_results.append(
+            [str(pdf_path), id_counter]
+        )
+
+        # Display result
+        console.print(
+            Text(
+                f"\n#{rank} | ID: {id_counter} "
+                f"| Similarity: {result['score']:.4f}\n"
+                f"PDF: {result['path']}\n"
+                f"Pages: {result['page_start']}-{result['page_end']}"
+            )
+        )
+
+        console.print(
+            Panel(
+                Text(result["text"]),# [:1500]
+                border_style="cyan"
+            )
+        )
+
+
 
 
 #======================================================
@@ -173,11 +251,6 @@ def aarich_print_pdf_result(pdfpath, tot_words, sstrings_findings, txt_append,sk
     txt_append("\n")
 #======================================================
 
-
-
-
-
-
 def read_json(path):
     with open(path, 'r',encoding="utf-8") as f:
         dict = json.load(f)
@@ -188,6 +261,7 @@ def write_json(path, data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 def display_help():
+    #TODO this does not work we need to change it
     help_text = """
 pdf-search.py — search strings inside PDFs and cache page text
 
@@ -298,24 +372,6 @@ def parse_sstrings(first_time:bool,raw_user_inp)->List[str]:
     
     return lis_sstring
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def open_with_sumatrapdf(file_path, sumatra_path=None):
     file_path = Path(file_path)
 
@@ -352,8 +408,6 @@ def open_with_sumatrapdf(file_path, sumatra_path=None):
     except Exception as e:
         print(f"Error opening file: {e}")
         return False
-
-
 
 def bbbbbopen_with_sumatrapdf(file_path, sumatra_path=None)->None | bool:
     
@@ -630,62 +684,84 @@ def open_file_finder_with_directory_path(start_path)->Path | None:
 
 
 
-def main():
-    def txt_append(text):
+def main(): #TODO ändra så argv input behandlass samma som input() input
+    def txt_append(text):  #TODO remove this and everything around this
         with open(txt_path, "a", encoding="utf-8") as txt:
             txt.write(text)
             
     first_time=True
     target_folder= gui_get__pdf_dir()
     
-    id_counter=0
+    id_counter=0                #used to save old results  #TODO better name for this 
     path_id_lis_last_results=[] #used to save old results
     while True:
         
         if not first_time:
-            raw_user_inp = input(">")
+            raw_user_inp = input(">") 
         else:
-            raw_user_inp="first time"   
+            raw_user_inp = "first time"
+   
+        # thi is just to keep track of all conditions that exist and so they are defined later
+        bool_user__empty_input:bool    
+        bool_user__help:bool    
+        bool_user__exit:bool   
+        bool_user__open_file:bool         
+        bool_user__open_pdf_dir:bool      
+        bool_user__change_pdf_dir:bool    
+        bool_user__vector_search:bool     
+        bool_user__search_sstrings_in_pdf_dir:bool   
+       
         
-        #this if user wants help       
-        if (first_time):
-            if (sys.argv[1]).lower().strip()=="help":   
-                display_help()
-                continue
+        
+        """empty input"""
+        bool_user__empty_input = (
+            (first_time)and(("".join(sys.argv[1:])).strip() == "")
+            or
+            (not first_time)and(raw_user_inp.strip() == "")
+        )
+        
+        """ 
+        display help for user
+        """
+        ic(parse.help)
+        ic(type(parse.help))
+        bool_user__help = False
+        if first_time:
+            for s in parse.help:
+                if s in raw_user_inp:
+                    bool_user__help=True
         else:
-            if ( (raw_user_inp).lower().strip()=="help"  ):
-                display_help()
-                continue
-
-        #this if user wants exit
-        if (first_time):
-            if (sys.argv[1]).lower().strip()=="exit":   
-                sys.exit()
-        else:
-            if ( (raw_user_inp).lower().strip()=="exit"  ):
-                sys.exit()
-                
+            for s in parse.help:
+                if s in "".join(sys.argv):
+                    bool_user__help=True
+        
+        """ 
+        User wants to exit
+        """
+        bool_user__exit = False
+        for s in parse.help:
+            if s in raw_user_inp:
+                bool_user__exit=True
+        if first_time:
+            bool_user__exit = False
+            
+        
+        """
+        this is for vector searching
+        """
+        try:
+            vector_parts = raw_user_inp.strip().split(maxsplit=1)
+            bool_user__vector_search = (
+                bool(vector_parts)
+                and vector_parts[0].lower() in parse.vector_search
+            )
+        except:
+            bool_user__vector_search=False
         
         
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        # What happens here is that we eiter open specific document or the target pdf directory
-        # We do this by 
-        #
-        #this if user wants to view pdf
-        #TODO we have this being to complex we could simplify this
-        #TODO also "open" is written two times     
-
         
         try:
-            bool_user_open_file =  (
+            bool_user__open_file =  (
                 (
                     not first_time
                 ) 
@@ -705,9 +781,15 @@ def main():
             )
         except:
             ic("öööö")
-            bool_user_open_file=False
+            bool_user__open_file=False
         
-        bool_user_open_pdf_dir =  (
+        
+        
+        """
+        User wants to open all files in the current pdf dir
+        """
+        
+        bool_user__open_pdf_dir =  (
             (
                 not first_time
             ) 
@@ -729,7 +811,7 @@ def main():
         or ( (raw_user_inp).lower().strip() =="--new-folder" ) 
         or ( (raw_user_inp).lower().strip() == "--new-dir" )
         """
-        bool_user_change_pdf_dir = (
+        bool_user__change_pdf_dir = (
             (
                 (raw_user_inp).lower().strip()
                 in parse.new_dir
@@ -756,34 +838,60 @@ def main():
         else:
             is_even = False
         
-        cmd_strings = [
-            list(parse.open_file[:])
-            +list(parse.open_folder[:])
-            +list(parse.new_dir[:])
-            +list(parse.help[:])
-            +list(parse.exit[:])
-        ]
-        no_user_cmd_strings= any(
-            (user_string not in cmd_strings) 
-            for user_string in (raw_user_inp).lower().strip().split()
-            )
+        cmd_strings = (
+              list(parse.open_file)
+            + list(parse.open_folder)
+            + list(parse.new_dir)
+            + list(parse.help)
+            + list(parse.exit)
+            + list(parse.vector_search)
+        )
+        no_user_cmd_strings = True
+        for cmd_string in cmd_strings:
+            if cmd_string in raw_user_inp:
+                no_user_cmd_strings = False
         
-        bool_user_search_sstrings_in_pdf_dir = (
+        bool_user__search_sstrings_in_pdf_dir = (
 
             (
-                no_user_cmd_strings
+                is_even == True # t.ex ' "hej" "hej" "hej" ' ---n quotation marks--> 6 ---is_even--> True
             )
             and
             (              
-                is_even == True # t.ex ' "hej" "hej" "hej" ' ---n quotation marks--> 6 ---is_even--> True
+                no_user_cmd_strings == True
             )
         )
         
         
         
 
+
+
+
+
+        ic(
+        bool_user__empty_input,
+        bool_user__help,
+        bool_user__exit,
+        bool_user__open_file,
+        bool_user__open_pdf_dir,
+        bool_user__change_pdf_dir,
+        bool_user__vector_search,
+        bool_user__search_sstrings_in_pdf_dir,)
+
+        if bool_user__empty_input:
+            first_time=False
+            continue
+
+        if bool_user__help:
+            display_help()
+            first_time=False
+            continue
+
+        elif bool_user__exit:
+            sys.exit()
             
-        if bool_user_open_file:
+        elif bool_user__open_file:
             #assert len(raw_user_inp)==1 
             # here user write: "--view <number>" or "--open <number>" or "--viewpdf <number>" or "--openpdf <number>" 
             # example: --open 2
@@ -801,8 +909,10 @@ def main():
             #ic("a1")
             open_with_sumatrapdf(pdf_path_that_should_be_opened)
             #ic("a2")
+            first_time=False
+            continue
 
-        elif bool_user_open_pdf_dir:
+        elif bool_user__open_pdf_dir:
             #
             #  here user write "--view" or "--open" or "--viewpdf" or "--openpdf"
             #
@@ -812,18 +922,24 @@ def main():
             for pdf_path in all_pdf_paths:
                 open_with_sumatrapdf(pdf_path)
             
-            
+            first_time=False
             continue
         
         #
         # we get target folder,  
         # target folder is folder that we will search all pdfs in 
         # 
-        elif bool_user_change_pdf_dir:
+        elif bool_user__change_pdf_dir:
             target_folder = gui_get__pdf_dir()
             continue
-
-        elif bool_user_search_sstrings_in_pdf_dir:
+             
+        elif bool_user__vector_search:
+            embed_texts = vec_search(embed_texts,raw_user_inp)
+            
+            first_time = False
+            continue
+        
+        elif bool_user__search_sstrings_in_pdf_dir:
 
 
             #these do this:    " string a "   "stringb" "string c"   -> [" string a ","stringb","string c"]
@@ -996,8 +1112,9 @@ def main():
             txt_append(f"\n\nelapsed time:{time.time()-start_time}\n===============================================================\n\n\n")
             first_time=False
 
+        else:
+            raise
 
 if __name__=="__main__":
     main()
-
 
