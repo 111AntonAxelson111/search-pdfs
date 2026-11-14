@@ -26,7 +26,7 @@ from rich.style import Style
 from dataclasses import dataclass
 
 import vector_search
-embed_texts = None
+
 
 
 
@@ -69,11 +69,164 @@ start_time = time.time()
 
 
 
+def get_action(raw_user_inp:str,first_time:bool):
+        
+        
+    """empty input"""
+    bool_user__empty_input = (
+        (first_time)and(("".join(sys.argv[1:])).strip() == "")
+        or
+        (not first_time)and(raw_user_inp.strip() == "")
+    )
+    
+    """ 
+    display help for user
+    """
+    ic(parse.help)
+    ic(type(parse.help))
+    bool_user__help = False
+    if first_time:
+        for s in parse.help:
+            if s in raw_user_inp:
+                bool_user__help=True
+    else:
+        for s in parse.help:
+            if s in "".join(sys.argv):
+                bool_user__help=True
+    
+    """ 
+    User wants to exit
+    """
+    bool_user__exit = False
+    for s in parse.help:
+        if s in raw_user_inp:
+            bool_user__exit=True
+    if first_time:
+        bool_user__exit = False
+        
+    
+    """
+    this is for vector searching
+    """
+    try:
+        vector_parts = raw_user_inp.strip().split(maxsplit=1)
+        bool_user__vector_search = (
+            bool(vector_parts)
+            and vector_parts[0].lower() in parse.vector_search
+        )
+    except:
+        bool_user__vector_search=False
+    
+    
+    
+    try:
+        bool_user__open_file =  (
+            (
+                not first_time
+            ) 
+            and 
+            ( 
+                raw_user_inp.lower().strip().split()[0]
+                in [s for s in parse.open_file]
+            )
+            and
+            (
+                len(raw_user_inp.lower().strip().split())==2
+            )
+            and
+            (   
+                (  raw_user_inp.lower().strip().split()[1]  ).isnumeric()
+            )
+        )
+    except:
+        ic("öööö")
+        bool_user__open_file=False
+    
+    
+    
+    """
+    User wants to open all files in the current pdf dir
+    """
+    
+    bool_user__open_pdf_dir =  (
+        (
+            not first_time
+        ) 
+        and 
+        (
+            len(raw_user_inp.lower().strip().split())==1
+        ) 
+        and 
+        ( 
+            raw_user_inp.lower().strip().split()[0] 
+            in [s for s in parse.open_folder]
+        )
+    )
+    
+    
+    
+    """
+    first_time 
+    or ( (raw_user_inp).lower().strip() =="--new-folder" ) 
+    or ( (raw_user_inp).lower().strip() == "--new-dir" )
+    """
+    bool_user__change_pdf_dir = (
+        (
+            (raw_user_inp).lower().strip()
+            in parse.new_dir
+        )
+    )
+    
+    
+    
+    
+    """
+    We search the pdf files for sstrings
+    if:{
+    * no other commands are in it 
+    AND
+    * the number of (") is even
+    }
+    """
+    n__double_quotation_mark=0 
+    for char in raw_user_inp:
+        if char=='"':
+            n__double_quotation_mark+=1
+    if (n__double_quotation_mark%2)==0:
+        is_even = True
+    else:
+        is_even = False
+    
+    cmd_strings = (
+            list(parse.open_file)
+        + list(parse.open_folder)
+        + list(parse.new_dir)
+        + list(parse.help)
+        + list(parse.exit)
+        + list(parse.vector_search)
+    )
+    no_user_cmd_strings = True
+    for cmd_string in cmd_strings:
+        if cmd_string in raw_user_inp:
+            no_user_cmd_strings = False
+    
+    bool_user__search_sstrings_in_pdf_dir = (
 
-def vec_search(embed_texts,raw_user_inp):
+        (
+            is_even == True # t.ex ' "hej" "hej" "hej" ' ---n quotation marks--> 6 ---is_even--> True
+        )
+        and
+        (              
+            no_user_cmd_strings == True
+        )
+    )
     
+    tup = bool_user__empty_input,bool_user__help,bool_user__exit,bool_user__open_file,bool_user__open_pdf_dir,bool_user__change_pdf_dir,bool_user__vector_search,bool_user__search_sstrings_in_pdf_dir
+    return tup
+        
+def vec_search(embed_texts,raw_user_inp,id_counter,path_id_lis_last_results):
     
-    if not  embed_texts is None:
+    if embed_texts=="nothing yet":
         embed_texts = vector_search.make_sentence_transformer_embedder(
             vector_search.EMBEDDING_MODEL_NAME
         )
@@ -121,8 +274,8 @@ def vec_search(embed_texts,raw_user_inp):
                 border_style="cyan"
             )
         )
-
-
+        
+    return embed_texts,id_counter,path_id_lis_last_results
 
 
 #======================================================
@@ -688,12 +841,15 @@ def main(): #TODO ändra så argv input behandlass samma som input() input
     def txt_append(text):  #TODO remove this and everything around this
         with open(txt_path, "a", encoding="utf-8") as txt:
             txt.write(text)
-            
+    
+    embed_texts = "nothing yet"
+    
     first_time=True
     target_folder= gui_get__pdf_dir()
     
     id_counter=0                #used to save old results  #TODO better name for this 
     path_id_lis_last_results=[] #used to save old results
+    
     while True:
         
         if not first_time:
@@ -713,155 +869,8 @@ def main(): #TODO ändra så argv input behandlass samma som input() input
        
         
         
-        """empty input"""
-        bool_user__empty_input = (
-            (first_time)and(("".join(sys.argv[1:])).strip() == "")
-            or
-            (not first_time)and(raw_user_inp.strip() == "")
-        )
-        
-        """ 
-        display help for user
-        """
-        ic(parse.help)
-        ic(type(parse.help))
-        bool_user__help = False
-        if first_time:
-            for s in parse.help:
-                if s in raw_user_inp:
-                    bool_user__help=True
-        else:
-            for s in parse.help:
-                if s in "".join(sys.argv):
-                    bool_user__help=True
-        
-        """ 
-        User wants to exit
-        """
-        bool_user__exit = False
-        for s in parse.help:
-            if s in raw_user_inp:
-                bool_user__exit=True
-        if first_time:
-            bool_user__exit = False
-            
-        
-        """
-        this is for vector searching
-        """
-        try:
-            vector_parts = raw_user_inp.strip().split(maxsplit=1)
-            bool_user__vector_search = (
-                bool(vector_parts)
-                and vector_parts[0].lower() in parse.vector_search
-            )
-        except:
-            bool_user__vector_search=False
-        
-        
-        
-        try:
-            bool_user__open_file =  (
-                (
-                    not first_time
-                ) 
-                and 
-                ( 
-                    raw_user_inp.lower().strip().split()[0]
-                    in [s for s in parse.open_file]
-                )
-                and
-                (
-                    len(raw_user_inp.lower().strip().split())==2
-                )
-                and
-                (   
-                    (  raw_user_inp.lower().strip().split()[1]  ).isnumeric()
-                )
-            )
-        except:
-            ic("öööö")
-            bool_user__open_file=False
-        
-        
-        
-        """
-        User wants to open all files in the current pdf dir
-        """
-        
-        bool_user__open_pdf_dir =  (
-            (
-                not first_time
-            ) 
-            and 
-            (
-                len(raw_user_inp.lower().strip().split())==1
-            ) 
-            and 
-            ( 
-                raw_user_inp.lower().strip().split()[0] 
-                in [s for s in parse.open_folder]
-            )
-        )
-        
-        
-        
-        """
-        first_time 
-        or ( (raw_user_inp).lower().strip() =="--new-folder" ) 
-        or ( (raw_user_inp).lower().strip() == "--new-dir" )
-        """
-        bool_user__change_pdf_dir = (
-            (
-                (raw_user_inp).lower().strip()
-                in parse.new_dir
-            )
-        )
-        
-        
-        
-        
-        """
-        We search the pdf files for sstrings
-        if:{
-        * no other commands are in it 
-        AND
-        * the number of (") is even
-        }
-        """
-        n__double_quotation_mark=0 
-        for char in raw_user_inp:
-            if char=='"':
-                n__double_quotation_mark+=1
-        if (n__double_quotation_mark%2)==0:
-            is_even = True
-        else:
-            is_even = False
-        
-        cmd_strings = (
-              list(parse.open_file)
-            + list(parse.open_folder)
-            + list(parse.new_dir)
-            + list(parse.help)
-            + list(parse.exit)
-            + list(parse.vector_search)
-        )
-        no_user_cmd_strings = True
-        for cmd_string in cmd_strings:
-            if cmd_string in raw_user_inp:
-                no_user_cmd_strings = False
-        
-        bool_user__search_sstrings_in_pdf_dir = (
-
-            (
-                is_even == True # t.ex ' "hej" "hej" "hej" ' ---n quotation marks--> 6 ---is_even--> True
-            )
-            and
-            (              
-                no_user_cmd_strings == True
-            )
-        )
-        
+        tup =get_action(raw_user_inp,first_time)
+        bool_user__empty_input,bool_user__help,bool_user__exit,bool_user__open_file,bool_user__open_pdf_dir,bool_user__change_pdf_dir,bool_user__vector_search,bool_user__search_sstrings_in_pdf_dir = tup
         
         
 
@@ -933,8 +942,8 @@ def main(): #TODO ändra så argv input behandlass samma som input() input
             target_folder = gui_get__pdf_dir()
             continue
              
-        elif bool_user__vector_search:
-            embed_texts = vec_search(embed_texts,raw_user_inp)
+        elif bool_user__vector_search: 
+            embed_texts,id_counter,path_id_lis_last_results = vec_search(embed_texts,raw_user_inp,id_counter,path_id_lis_last_results)
             
             first_time = False
             continue
